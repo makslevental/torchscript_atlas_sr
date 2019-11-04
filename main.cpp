@@ -4,8 +4,10 @@
 #include <memory>
 
 int main(int argc, const char *argv[]) {
+    torch::manual_seed(1);
+
     if (argc != 2) {
-        std::cerr << "usage: example-app <path-to-exported-script-model>\n";
+        std::cerr << "usage: main <path-to-exported-script-model>\n";
         return -1;
     }
 
@@ -18,15 +20,16 @@ int main(int argc, const char *argv[]) {
     }
     catch (const c10::Error &e) {
         std::cerr << "error loading the model\n";
+        std::cerr << argv[1];
         return -1;
     }
 
     // Create a vector of inputs.
     std::vector<torch::jit::IValue> inputs;
-    auto tensor = torch::ones({1, 3, 224, 224}).to(at::kCUDA);
+    auto tensor = torch::ones({1, 3, 100, 100}).to(at::kCUDA);
     inputs.emplace_back(tensor);
 
     // Execute the model and turn its output into a tensor.
-    at::Tensor output = model.forward(inputs).toTensor();
-    std::cout << output.slice(/*dim=*/1, /*start=*/0, /*end=*/5) << '\n';
+    auto output = model.forward(inputs).toTensor();
+    std::cout << output[0][1][1].slice(/*dim=*/0, /*start=*/0, /*end=*/10) << '\n';
 }
