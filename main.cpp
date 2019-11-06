@@ -30,31 +30,6 @@ std::string cwd() {
     return current_path;
 }
 
-enum Model {
-    dbpn,
-    srresnet,
-    edsr,
-    lanczos
-};
-
-std::istream &operator>>(std::istream &ins, Model &m) {
-    std::string model;
-    ins >> model;
-//    std::cout << "model " << model << std::endl;
-    if (model == "dbpn") {
-        m = dbpn;
-    } else if (model == "srresnet") {
-        m = srresnet;
-    } else if (model == "edsr") {
-        m = edsr;
-    } else {
-        std::cerr << "\nerror: wrong model " << model << std::endl;
-        exit(-1);
-    }
-
-    return ins;
-}
-
 inline bool file_exists(const std::string &name) {
     std::cout << "checking file exists " << name << std::endl;
     std::ifstream f(name.c_str());
@@ -67,7 +42,6 @@ cxxopts::ParseResult parse(int argc, char *argv[]) {
 
         options.add_options()
                 ("help", "Print help")
-                ("m, model", "", cxxopts::value<Model>(), "dbpn,srresnet,edsr")
                 ("w, weights", "weights file path", cxxopts::value<std::string>())
                 ("i, input", "input image file path", cxxopts::value<std::string>())
                 ("o, output", "output image file path", cxxopts::value<std::string>());
@@ -80,7 +54,7 @@ cxxopts::ParseResult parse(int argc, char *argv[]) {
         }
 
         bool missing = false;
-        for (auto o : {"m", "w", "i", "o"}) {
+        for (auto o : {"w", "i", "o"}) {
             if (result.count(o) == 0) {
                 std::cerr << "missing arg " << o << std::endl;
                 missing = true;
@@ -96,9 +70,6 @@ cxxopts::ParseResult parse(int argc, char *argv[]) {
             }
         }
         if (missing) exit(-1);
-
-        std::cout << "model = " << result["model"].as<Model>()
-                  << std::endl;
 
         std::cout << "weights = " << result["weights"].as<std::string>()
                   << std::endl;
@@ -125,11 +96,11 @@ void check_cuda() {
             std::cerr << "couldn't get number of gpus";
             exit(-1);
         }
-        for (int device = 0; device < count; ++device) {
-            cudaDeviceProp prop{};
-            if (cudaGetDeviceProperties(&prop, device) == cudaError::cudaSuccess)
-                std::printf("%d.%d\n", prop.major, prop.minor);
-        }
+//        for (int device = 0; device < count; ++device) {
+//            cudaDeviceProp prop{};
+//            if (cudaGetDeviceProperties(&prop, device) == cudaError::cudaSuccess)
+//                std::printf("%d.%d\n", prop.major, prop.minor);
+//        }
     } else {
         std::cerr << "couldn't get cuda device count";
         exit(-1);
@@ -137,31 +108,33 @@ void check_cuda() {
 }
 
 at::Tensor cv2_to_torch(cv::Mat frame) {
-    cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
     frame.convertTo(frame, CV_32FC3, 1.0f / 255.0f);
     at::Tensor input_tensor = torch::from_blob(
-            frame.data,
+            frame.ptr<float>(),
             {1, frame.size().height, frame.size().width, frame.channels()}
     );
-    return input_tensor.permute({0, 3, 1, 2});
+    input_tensor = input_tensor.permute({0, 3, 1, 2});
+    return input_tensor.clone();
 }
 
 cv::Mat cv2_image(const std::string &fp) {
     cv::Mat image = imread(fp, cv::IMREAD_COLOR);
-//    namedWindow("Display window", cv::WINDOW_AUTOSIZE);
-//    imshow("Display window", image);
-//    cv::waitKey(0);
     return image;
 }
 
-cv::Mat torch_to_cv2(at::Tensor out_tensor, int h, int w) {
+void display_cv_image(cv::Mat image) {
+    namedWindow("Display window", cv::WINDOW_AUTOSIZE);
+    imshow("Display window", image);
+    cv::waitKey(0);
+}
 
-    out_tensor = out_tensor.squeeze().detach().permute({1, 2, 0});
-    out_tensor = out_tensor.mul(255).clamp(0, 255).to(torch::kU8);
-    out_tensor = out_tensor.to(torch::kCPU);
-    cv::Mat resultImg(h, w, CV_8UC3);
-    std::memcpy((void *) resultImg.data, out_tensor.data_ptr(), sizeof(torch::kU8) * out_tensor.numel());
-    return resultImg;
+cv::Mat torch_to_cv2(at::Tensor tensor) {
+    tensor = tensor.squeeze().detach().permute({1, 2, 0});
+    tensor = tensor.mul(255).clamp(0, 255).to(torch::kU8);
+    tensor = tensor.to(torch::kCPU);
+    cv::Mat result_img(tensor.size(0), tensor.size(1), CV_8UC3);
+    std::memcpy((void *) result_img.data, tensor.data_ptr(), sizeof(torch::kU8) * tensor.numel());
+    return result_img;
 }
 
 int main(int argc, char *argv[]) {
@@ -170,7 +143,6 @@ int main(int argc, char *argv[]) {
 
     auto result = parse(argc, argv);
     const auto &arguments = result.arguments();
-
 
     torch::jit::script::Module model;
     try {
@@ -189,12 +161,17 @@ int main(int argc, char *argv[]) {
 
     cv::Mat img = cv2_image(result["input"].as<std::string>());
     at::Tensor t_img = cv2_to_torch(img);
-    std::cout << t_img;
-//
-//    at::Tensor tensor = torch::ones({1, 3, 100, 100}).to(at::kCUDA);
-//    inputs.emplace_back(tensor);
+    t_img = t_img.to(at::kCUDA);
+    inputs.emplace_back(t_img);
 
-    // Execute the model and turn its output into a tensor.
-//    at::Tensor output = model.forward(inputs).toTensor();
-//    std::cout << output[0][1][1].slice(/*dim=*/0, /*start=*/0, /*end=*/10) << '\n';
+//     Execute the model and turn its output into a tensor.
+    at::Tensor output = model.forward(inputs).toTensor();
+    std::cout <<
+              output.size(1) << "," <<
+              output.size(2) << "," <<
+              output.size(3) << "," << std::endl;
+
+    cv::Mat sr_img = torch_to_cv2(output[0]);
+//    display_cv_image(sr_img);
+    cv::imwrite(result["output"].as<std::string>(), sr_img);
 }
