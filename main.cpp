@@ -8,28 +8,6 @@
 #include <opencv2/highgui/highgui.hpp>
 
 
-#ifdef WINDOWS
-#include <direct.h>
-#define get_cwd _getcwd
-#else
-
-#include <unistd.h>
-
-#define get_cwd getcwd
-#endif
-
-std::string cwd() {
-    char current_path[FILENAME_MAX];
-
-    if (!get_cwd(current_path, sizeof(current_path))) {
-        std::cerr << "couldn't get cwd" << std::endl;
-        exit(-1);
-    }
-
-    current_path[sizeof(current_path) - 1] = '\0'; /* not really required */
-    return current_path;
-}
-
 inline bool file_exists(const std::string &name) {
     std::cout << "checking file exists " << name << std::endl;
     std::ifstream f(name.c_str());
@@ -96,11 +74,6 @@ void check_cuda() {
             std::cerr << "couldn't get number of gpus";
             exit(-1);
         }
-//        for (int device = 0; device < count; ++device) {
-//            cudaDeviceProp prop{};
-//            if (cudaGetDeviceProperties(&prop, device) == cudaError::cudaSuccess)
-//                std::printf("%d.%d\n", prop.major, prop.minor);
-//        }
     } else {
         std::cerr << "couldn't get cuda device count";
         exit(-1);

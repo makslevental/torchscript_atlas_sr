@@ -1,3 +1,4 @@
+import argparse
 from collections import OrderedDict
 from os.path import basename, splitext
 from pprint import pprint
@@ -8,8 +9,6 @@ from torch import nn
 from dbpn import DBPNITER
 from edsr import EDSR
 from srresnet import Generator
-
-torch.manual_seed(1)
 
 
 def remove_module_load(state_dict):
@@ -42,29 +41,37 @@ def load_model_state(model: nn.Module, fp: str, remove_module=True, strict=True)
     return model
 
 
-upscale_factor = 2
-model_pt ="/home/maksim/data/checkpoints/dbpn_checkpoints/edsr_x2.pt"
+parser = argparse.ArgumentParser()
+parser.add_argument("--model")
+parser.add_argument("--upscale", type=int)
+
+args = parser.parse_args()
+
+upscale_factor = args.upscale
+model_name = args.model
+model_fp = f"{model_name}_{upscale_factor}x.pth"
 
 # srresnet
-# model = Generator(upscale_factor)
-
-# dbpn
-# model = DBPNITER(
-#     num_channels=3,
-#     base_filter=64,
-#     feat=256,
-#     num_stages=3,
-#     scale_factor=upscale_factor,
-# )
-
-# edsr
-model = EDSR(upscale_factor, n_resblocks=32, n_feats=256, res_scale=0.1)
+if model_name == "srresnet":
+    model = Generator(upscale_factor)
+elif model_name == "dbpn":
+    model = DBPNITER(
+        num_channels=3,
+        base_filter=64,
+        feat=256,
+        num_stages=3,
+        scale_factor=upscale_factor,
+    )
+elif model_name == "edsr":
+    model = EDSR(upscale_factor, n_resblocks=32, n_feats=256, res_scale=0.1)
+else:
+    raise Exception("unknown model name")
 
 model = load_model_state(
-    model, model_pt
+    model, model_fp
 )
 traced_script_module = torch.jit.script(model)
 
-bn = splitext(basename(model_pt))[0]
+bn = splitext(basename(model_fp))[0]
 
 traced_script_module.save(f"traced_{bn}.pt")
