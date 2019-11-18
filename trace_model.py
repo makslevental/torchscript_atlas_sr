@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from os.path import basename, splitext
 from pprint import pprint
 
 import torch
@@ -6,6 +7,7 @@ from torch import nn
 
 from dbpn import DBPNITER
 from edsr import EDSR
+from srresnet import Generator
 
 torch.manual_seed(1)
 
@@ -40,8 +42,13 @@ def load_model_state(model: nn.Module, fp: str, remove_module=True, strict=True)
     return model
 
 
-# model = Generator(4)
 upscale_factor = 2
+model_pt ="/home/maksim/data/checkpoints/dbpn_checkpoints/edsr_x2.pt"
+
+# srresnet
+# model = Generator(upscale_factor)
+
+# dbpn
 # model = DBPNITER(
 #     num_channels=3,
 #     base_filter=64,
@@ -50,17 +57,14 @@ upscale_factor = 2
 #     scale_factor=upscale_factor,
 # )
 
-n_resblocks = 32
-n_feats = 256
-model = EDSR(upscale_factor, n_resblocks, n_feats, res_scale=0.1)
+# edsr
+model = EDSR(upscale_factor, n_resblocks=32, n_feats=256, res_scale=0.1)
 
 model = load_model_state(
-    model, "/home/maksim/data/checkpoints/dbpn_checkpoints/edsr_x2.pt"
+    model, model_pt
 )
-# An example input you would normally provide to your model's forward() method.
-# Use torch.jit.trace to generate a torch.jit.ScriptModule via tracing.
 traced_script_module = torch.jit.script(model)
-output = traced_script_module(torch.ones(1, 3, 100, 100))
-pprint(output[0, 1, 1, :10].detach().numpy().tolist())
 
-traced_script_module.save("traced_dbpn_model.pt")
+bn = splitext(basename(model_pt))[0]
+
+traced_script_module.save(f"traced_{bn}.pt")

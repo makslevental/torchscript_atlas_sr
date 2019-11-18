@@ -2,7 +2,7 @@
 #include <cuda_runtime.h>
 #include <torch/script.h> // One-stop header.
 #include <cstdio>
-#include <cxxopts.hpp>
+#include "cxxopts.hpp"
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui/highgui.hpp>

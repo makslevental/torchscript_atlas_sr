@@ -23,5 +23,3 @@ if (MSVC)
             ${TORCH_DLLS}
             $<TARGET_FILE_DIR:main>)
 endif (MSVC)
-
-include_directories("cxxopts-2.2.0/include")

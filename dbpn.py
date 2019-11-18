@@ -690,3 +690,7 @@ class DBPNITER(nn.Module):
         x = self.output_conv(results)
 
         return x
+
+if __name__ == '__main__':
+    u = Upsample2xBlock(1,2)
+    hasattr()
